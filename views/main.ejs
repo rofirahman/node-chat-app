@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, maximum-scale=1">
+    <title>MultiChat on Node.Js</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.2.1/css/bootstrap.min.css" integrity="sha384-GJzZqFGwb1QTTN6wy59ffF1BuGJpLSa9DkKMp0DgiMDm4iYMj70gZWKYbI706tWS" crossorigin="anonymous">
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css">
+    <script src="../../socket.io/socket.io.js"></script>
+    <script src="https://code.jquery.com/jquery-3.1.0.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.6/umd/popper.min.js" integrity="sha384-wHAiFfRlMFy6i5SRaxvfOCifBUQy1xHdJ/yoi7FRNXMRBu5WHdZYu1hA6ZOblgut" crossorigin="anonymous"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.2.1/js/bootstrap.min.js" integrity="sha384-B0UglyR+jN6CkvvICOB2joaf5I4l3gm9GU6Hc1og6Ls7i6U/mkkaduKaBhlAXv9k" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/sweetalert/dist/sweetalert.min.js"></script>
+</head>
+<body>
+    <div class="d-flex" id="wrapper">
+
+        <!-- Sidebar -->
+        <div class="border-right" id="sidebar-wrapper" style="background-color: #fff;border-right: 0.5px solid #000">
+            <div class="sidebar-heading">
+                <p class="text-muted" style="font-size: 12px;margin-bottom: 0px;">Login sebagai</p>
+                <h3 id="title"></h3>
+            </div>
+            <div class="list-group list-group-flush text-dark nav nav-tabs" id="nav-tab" role="tablist" style="font-size: 14px;">
+                <a style="border-bottom: 1px solid #000;border-top: 1px solid #000;" class="list-group-item list-group-item-action bg-light nav-item nav-link text-dark px-4 py-3 active" id="nav-group-chat-tab" data-toggle="tab" href="#nav-group-chat" role="tab" aria-controls="nav-group-chat" aria-selected="true" onclick="changeTitle('JS App Chat', '/')">Group Chat</a>
+            </div>
+        </div>
+        <!-- /#sidebar-wrapper -->
+
+        <!-- Page Content -->
+        <div id="page-content-wrapper">
+            <nav class="navbar navbar-expand-lg text-white justify-content-between" style="background-color: #30475e">
+                <button class="btn btn-outline-light mr-4" id="menu-toggle"><i class="fa fa-bars"></i> Menu</button>
+                <div class="d-flex flex-row pl-2 align-items-center">
+                    <div class="d-flex flex-column">
+                        <h4 id="chatWith">JS App Chat</h4>
+                        <span style="font-size: 10px">🟢 <span id="users_count">-</span> pengguna sedang aktif</span>
+                    </div>
+                </div>
+            </nav>
+
+            <div class="container-fluid tab-content" style="padding-right: 0; padding-left: 0">
+                <div class="row">
+                    <div class="col-md-12 tab-content" id="container-message">
+                        <div class="tab-pane fade show active" id="nav-group-chat" role="tabpanel" aria-labelledby="nav-group-chat-tab">
+                            <div class="full-height col-sm-12">
+                                <ul class="messages" id="pesan"></ul>
+                            </div>
+                        </div>
+                    </div>
+                    <form action="/" method="POST" id="chatForm" class="chatForm fixed-bottom">
+                        <div class="form-row" style="background-color: #fff;padding: 10px;bottom: 0">
+                            <div class="col-md-10 col-sm-9 col-9 mb-2">
+                                <input type="text" id="teksPesan" required autocomplete="off" autofocus="on" placeholder="Ketik pesan disini.." class="form-control">
+                            </div>
+                            <div class="col-md-2 col-sm-3 col-3">
+                                <button type="submit" class="btn text-white mb-2" style="width: 100%;background-color: #30475e">Kirim</button>
+                            </div>
+                        </div>
+                    </form>
+
+                </div>
+            </div>
+        </div>
+        <!-- /#page-content-wrapper -->
+
+    </div>
+
+    <script>
+
+        const socket = io.connect('127.0.0.1:6558')
+        const chatForm = document.getElementById('chatForm')
+        const teksPesan = document.getElementById('teksPesan')
+
+        document.addEventListener('DOMContentLoaded', () => {
+            window.history.replaceState('', '', '/')
+        }, false);
+
+        swal("Masukkan username kamu:", {
+          content: "input",
+          allowOutsideClick: false,
+        })
+        .then((username) => {
+            if (username == '' || username == null) {username = 'user'}
+            username = username.toLowerCase().replace(/[^a-z0-9]/g, "") + Math.floor(Math.random() * 100)
+            socket.emit('username', {username: username})
+            sessionStorage.setItem('username', username)
+            sessionStorage.setItem('color', randDarkColor())
+            document.getElementById('title').innerHTML = "<strong>" + username + "</strong>"
+            $("#teksPesan").focus();
+        });
+
+        chatForm.addEventListener('submit', (e) => {
+            e.preventDefault()
+            let to = window.location.href.split('#', 2)[1]
+            if (window.location.href.indexOf('#') > 0) {
+                socket.emit("private", { pesan: teksPesan.value, ke: to, dari: sessionStorage.getItem("username"), time: new Date().getHours() + ":" + new Date().getMinutes() });
+            } else {
+                socket.emit('chat_message', { message: teksPesan.value, color: sessionStorage.getItem('color'), time: new Date().getHours() + ":" + new Date().getMinutes()})
+            }
+            teksPesan.value = ''
+            return false
+        })
+
+        socket.on("private", ({username, message, to, color, time}) => {
+            if (username == null) {
+                alert(message)
+            } else {
+                if (username == sessionStorage.getItem('username')) {
+                    createMessageElement({ id: 'pesan-'+to, username: username, pesan: message, color: username == sessionStorage.getItem('username') ? '#000000' : color, style: username == sessionStorage.getItem('username') ? 'right' : 'left', time: time})
+                } else {
+                    if (document.getElementById(username)) {
+                        createMessageElement({ id: 'pesan-'+username, username: username, pesan: message, color: username == sessionStorage.getItem('username') ? '#000000' : color, style: username == sessionStorage.getItem('username') ? 'right' : 'left', time: time})
+                    } else {
+                        chatToUser(username)
+                        createMessageElement({ id: 'pesan-'+username, username: username, pesan: message, color: username == sessionStorage.getItem('username') ? '#000000' : color, style: username == sessionStorage.getItem('username') ? 'right' : 'left', time: time})
+                    }
+                }
+            }
+        });
+
+        socket.on('chat_message', ({username, message, color, time}) => {
+            createMessageElement({ id: 'pesan', username: username, pesan: message, color: username == sessionStorage.getItem('username') ? '#000000' : color, style: username == sessionStorage.getItem('username') ? 'right' : 'left', time: time })
+        })
+
+        socket.on('is_online', ({username, message, status, users}) => {
+            document.getElementById('users_count').innerText = Object.keys(users).length
+            console.log(Object.keys(users).length)
+            let msgElem = document.createElement('li')
+            msgElem.setAttribute('class', 'p-1 text-center rounded mb-3')
+            var backgroundColor
+            if (status == 'online') {
+                backgroundColor = '#fdf1b6'
+            } else {
+                backgroundColor = '#f5f5f5'
+                username == sessionStorage.getItem('username') ? window.location.reload() : '';
+                if (document.getElementById('nav-message-'+username)) {document.getElementById('nav-message-'+username).remove()}
+                if (document.getElementById(username)) {document.getElementById(username).remove()}
+            }
+            let span = document.createElement('span')
+            span.setAttribute('style', 'background:'+ backgroundColor + '; color: #000000; padding:10px')
+            span.setAttribute('class', 'rounded')
+            span.innerHTML = username + ' ' + message
+            msgElem.appendChild(span)
+            document.getElementById('pesan').appendChild(msgElem)
+            $('#pesan').animate({ scrollTop: $('#pesan').prop('scrollHeight') }, 500)
+        })
+
+        const createMessageElement = (data) => {
+            let alink = document.createElement('a')
+            alink.setAttribute('href', "#"+data.username)
+            alink.innerText = data.style == 'left' ? data.username : '';
+            let username = document.createElement('div')
+            username.setAttribute('class', 'text-bold')
+            username.setAttribute('style', 'color: ' + data.color)
+            username.setAttribute('onclick', `chatToUser('${data.username}')`)
+            username.appendChild(alink)
+            let text = document.createElement('div')
+            text.setAttribute('class', 'text')
+            text.innerHTML = data.pesan
+            let time = document.createElement('div')
+            time.setAttribute("class", "text-right small text-muted")
+            time.setAttribute('style', 'margin-top:-3px')
+            time.innerHTML = data.time
+            let text_wrapper = document.createElement('div')
+            text_wrapper.setAttribute('class', 'text_wrapper')
+            text_wrapper.appendChild(username)
+            text_wrapper.appendChild(text)
+            text_wrapper.appendChild(time)
+            let msgElem = document.createElement('li')
+            msgElem.setAttribute('class', 'message '+ data.style + ' appeared')
+            msgElem.appendChild(text_wrapper)
+            document.getElementById(data.id).appendChild(msgElem)
+
+            $('#pesan').animate({ scrollTop: $('#pesan').prop('scrollHeight') }, 300)
+
+        }
+
+        const randDarkColor = () => {
+            var lum = -0.25;
+            var hex = String('#' + Math.random().toString(16).slice(2, 8).toUpperCase()).replace(/[^0-9a-f]/gi, '');
+            if (hex.length < 6) {
+                hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+            }
+            var rgb = "#",
+                c, i;
+            for (i = 0; i < 3; i++) {
+                c = parseInt(hex.substr(i * 2, 2), 16);
+                c = Math.round(Math.min(Math.max(0, c + (c * lum)), 255)).toString(16);
+                rgb += ("00" + c).substr(c.length);
+            }
+            return rgb;
+        }
+
+        const chatToUser = (username) => {
+            if (document.getElementById(username)) {
+                $('#'+username).tab('show')
+                document.getElementById('chatWith').innerHTML = username
+                return
+            }
+            $(".row > div > div.show").removeClass("show")
+            $(".row > div > div.active").removeClass("active")
+            $("#nav-tab > a.active").removeClass("active")
+            $('#nav-tab > a').attr('aria-selected','false');
+            let a = document.createElement('a')
+            a.setAttribute('class', 'list-group-item list-group-item-action bg-light nav-item nav-link text-dark px-4 py-3 active')
+            a.setAttribute('id', 'nav-message-'+username)
+            a.setAttribute('data-toggle', 'tab')
+            a.setAttribute('href', '#'+username)
+            a.setAttribute('role', 'tab')
+            a.setAttribute('aria-controls', username)
+            a.setAttribute('aria-selected', 'true')
+            a.setAttribute('onclick', 'changeTitle("'+username+'", "#'+username+'")')
+            a.setAttribute('style', 'border-bottom: 1px solid #000;border-top: 1px solid #000;')
+            a.innerHTML = username
+            document.getElementById('nav-tab').appendChild(a)
+
+            let tab = document.createElement('div')
+            tab.setAttribute('class', 'tab-pane fade show active')
+            tab.setAttribute('id', username)
+            tab.setAttribute('role', 'tabpanel')
+            tab.setAttribute('aria-labelledby', 'nav-message-'+username)
+
+            let full = document.createElement('div')
+            full.setAttribute('class', 'full-height col-sm-12')
+
+            let ul = document.createElement('ul')
+            ul.setAttribute('class', 'messages')
+            ul.setAttribute('id', 'pesan-'+username)
+
+            let row = document.createElement('div')
+            row.setAttribute('class', 'form-row')
+            row.setAttribute('style', 'background-color: #fff;padding: 10px;bottom: 0')
+
+            let pesan = document.createElement('div')
+            pesan.setAttribute('class', 'col-md-10 col-sm-9 col-9 mb-2')
+
+            let inputPesan = document.createElement('input')
+            inputPesan.setAttribute('type', 'text')
+            inputPesan.setAttribute('id', 'teks-'+username)
+            inputPesan.setAttribute('autocomplete', 'off')
+            inputPesan.setAttribute('autofocus', 'on')
+            inputPesan.setAttribute('placeholder', 'Ketik pesan disini..')
+            inputPesan.setAttribute('class', 'form-control')
+            inputPesan.setAttribute('required', 'required')
+
+            let divBtn = document.createElement('div')
+            divBtn.setAttribute('class', 'col-md-2 col-sm-3 col-3')
+
+            let button = document.createElement('button')
+            button.setAttribute('type', 'submit')
+            button.setAttribute('class', 'btn btn-info mb-2')
+            button.setAttribute('style', 'width: 100%')
+            button.innerText = "Kirim"
+
+            let welcome = document.createElement('li')
+            welcome.setAttribute('class', 'p-1 text-center rounded mb-3')
+            let span = document.createElement('span')
+            span.setAttribute('style', 'background:#fdf1b6; color: #000000; padding:10px')
+            span.setAttribute('class', 'rounded')
+            span.innerHTML = 'Chat pribadi dengan '+username
+            welcome.appendChild(span)
+
+            ul.appendChild(welcome)
+
+            divBtn.appendChild(button)
+            pesan.appendChild(inputPesan)
+            row.appendChild(pesan)
+            row.appendChild(divBtn)
+            full.appendChild(ul)
+            tab.appendChild(full)
+            document.getElementById('container-message').appendChild(tab)
+            window.history.replaceState('', '', '#'+username)
+            $('#'+username).tab('show')
+            document.getElementById('chatWith').innerHTML = username
+        }
+
+        const sendPrivateMessage = (e, from, message, to) => {
+            e.preventDefault()
+            let teksPesan = document.getElementById(message)
+            socket.emit("private", { pesan: teksPesan.value, ke: to, dari: from });
+            teksPesan.value = ''
+            return false
+        }
+
+        const changeTitle = (username, url) => {
+            document.getElementById('chatWith').innerHTML = username
+            window.history.replaceState('', '', url)
+        }
+
+        $("#menu-toggle").click(function(e) {
+          e.preventDefault();
+          $("#wrapper").toggleClass("toggled");
+        });
+    </script>
+</body>
+</html>
